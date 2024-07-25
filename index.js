@@ -22,7 +22,7 @@ app.get("/", (req, res)=>{
 // Image storage Engine to store a data in upload folder
 
 const storage = multer.diskStorage({
-    destination: './upload/images',  // here we give the direction of the folder we want to save the da data
+    destination: './upload/images',  // here we give the direction of the folder we want to save the da data in
     filename:(req, file, cb) =>{
         return cb(null, `${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`)
 
