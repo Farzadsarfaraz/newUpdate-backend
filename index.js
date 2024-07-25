@@ -79,8 +79,18 @@ const Product = mongoose.model("Product", {   // Product is the name of the Sche
 })
 
 app.post('/addproduct', async (req, res)=>{ // we use our Schema here
+    let products = await Product.find({})  // with this we can get all the product in one array
+    let id;
+    if(products.length >0)
+    {
+        let last_product_array = product.slice(-1);
+        let last_product = last_product_array[0];
+        id = last_product.id+1;
+    }else{
+        id = 1
+    }
     const product = new Product({
-        id:req.body.id,
+        id:id,         
         name:req.body.name,
         image:req.body.image,
         category:req.body.category,
