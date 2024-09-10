@@ -1,42 +1,36 @@
-const port = process.env.App_PORT || 4000; // dotenv should be downloaded in order to work env
-require('dotenv').config()
+require('dotenv').config();
 const express = require('express');
-const app = express();
 const mongoose = require('mongoose');
 const multer = require('multer');
 const path = require('path');
 const cors = require('cors');
-const fs = require('fs');
-const { stringify } = require('querystring');
-const { type } = require('os');
-const { error } = require('console');
-const { emit } = require('process');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
+const app = express();
+const port = 4000;
 
+app.use(express.json());
+app.use(cors());
 
-app.use(express.json());  // we get the data automatically from the json
-app.use(cors());  // we connect our project with the port
-
+// MongoDB Connection
 const mongoURI = process.env.MONGO_URI;
-mongoose.connect(mongoURI).then(() => {
+mongoose.connect(mongoURI)
+  .then(() => {
     console.log('Connected to the database successfully!');
   })
   .catch((err) => {
     console.error('Connection failed:', err.message);
   });
 
-// API creation
-
-app.get("/", (req, res) => { // get is used to read the data,  Request that we get from the Browser.
+// Root endpoint
+app.get("/", (req, res) => {
     res.send("Express App is running");
 });
 
-// Image storage Engine to store data in upload folder 
-
+// Image Storage Configuration
 const storage = multer.diskStorage({
-    destination: './upload/images',  // here we give the direction of the folder we want to save the data in
+    destination: './upload/images',
     filename: (req, file, cb) => {
         return cb(null, `${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`);
     }
@@ -44,19 +38,19 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Creating Upload endpoint for images
+// Serve static images
 app.use('/images', express.static('upload/images'));
 
-app.post("/upload", upload.single('product'), (req, res) => {  // the field name product
+// Image Upload Endpoint
+app.post("/upload", upload.single('product'), (req, res) => {
     res.json({
         success: 1,
-        image_url: `http://localhost:${port}/images/${req.file.filename}`  // all the photos saved in images
+        image_url: `http://localhost:${port}/images/${req.file.filename}`
     });
 });
 
-// Schema for Creating product
-
-const Product = mongoose.model("Product", {   // Product is the name of the Schema and for Product we define product model
+// Product Schema
+const Product = mongoose.model("Product", {
     id: {
         type: Number,
         required: true
@@ -91,17 +85,12 @@ const Product = mongoose.model("Product", {   // Product is the name of the Sche
     }
 });
 
-app.post('/addproduct', async (req, res) => { // we use our Schema here
+// Add Product Endpoint
+app.post('/addproduct', async (req, res) => {
     try {
-        let products = await Product.find({});  // with this we can get all the products in one array
-        let id;
-        if (products.length > 0) {
-            let last_product_array = products.slice(-1);
-            let last_product = last_product_array[0];
-            id = last_product.id + 1;
-        } else {
-            id = 1;
-        }
+        let products = await Product.find({});
+        let id = products.length > 0 ? products[products.length - 1].id + 1 : 1;
+        
         const newProduct = new Product({
             id: id,
             name: req.body.name,
@@ -110,9 +99,8 @@ app.post('/addproduct', async (req, res) => { // we use our Schema here
             new_price: req.body.new_price,
             old_price: req.body.old_price
         });
-        console.log(newProduct);
+
         await newProduct.save();
-        console.log("Saved");
         res.json({
             success: true,
             name: req.body.name
@@ -123,16 +111,14 @@ app.post('/addproduct', async (req, res) => { // we use our Schema here
     }
 });
 
-// Creating API for deleting a product
-
+// Remove Product Endpoint
 app.post('/removeproduct', async (req, res) => {
     try {
         const product = await Product.findOneAndDelete({ id: req.body.id });
         if (product) {
-            console.log("Removed");
             res.json({
                 success: true,
-                name: req.body.name
+                name: product.name
             });
         } else {
             res.status(404).json({ success: false, message: "Product not found" });
@@ -143,12 +129,10 @@ app.post('/removeproduct', async (req, res) => {
     }
 });
 
-// Creating API for getting all Products;
-
+// Get All Products Endpoint
 app.get('/allproducts', async (req, res) => {
     try {
         let products = await Product.find({});
-        console.log("All products fetched");
         res.json(products);
     } catch (error) {
         console.error("Error fetching products:", error);
@@ -156,84 +140,88 @@ app.get('/allproducts', async (req, res) => {
     }
 });
 
-// Schema creating for user Model
-const Users = mongoose.model('Users',{
-    name:{
+// User Schema
+const Users = mongoose.model('Users', {
+    name: {
         type: String,
+        required: true
     },
-    email:{
+    email: {
         type: String,
-        unique: true,  // when someone make a profile with one Email id so he can not do it again.
+        required: true,
+        unique: true,
     },
-    password:{
-        type: String, 
+    password: {
+        type: String,
+        required: true
     },
-    cartData:{
+    cartData: {
         type: Object,
+        default: {}
     },
-    date:{
+    date: {
         type: Date,
-        default:Date.now,
+        default: Date.now,
     }
-})
+});
 
-// Creating Endpoint for registration the user
-
-app.post('/signup', async(req, res)=>{
-
-    let check = await Users.findOne({email:req.body.email}) // If any email is already there we get to check
-    if(check){
-        res.status(400).json({success:false,errors:"Existing email found"})
-    }
-    let cart ={};
-    
-    for(let i = 0; i< 300; i++){
-        cart[i] = 0;
-    }
-    const user = new Users({
-        name:req.body.username,
-        email:req.body.email,
-        password:req.body.password,
-        cartData:cart,
-    })
-
-    await user.save()// Save the Data on Database
-    const data ={
-        user:{
-            id:user.id
+// User Signup Endpoint
+app.post('/signup', async (req, res) => {
+    try {
+        let check = await Users.findOne({email: req.body.email});
+        if (check) {
+            return res.status(400).json({success: false, errors: "Email already exists"});
         }
-    }
 
-    const token = jwt.sign(data,'secret_ecom');
-    res.json({success:true,token})
-})
-
-// Creating endpoint for user login
-app.post('/login',async(req,res)=>{
-    let user = await Users.findOne({email:req.body.email});
-    if(user){
-        const passCompare = req.body.password === user.password;
-        if(passCompare){
-            const data = {
-                user:{
-                    id:user.id
-                }
-            }
-            const token = jwt.sign(data,'secret_ecom');
-            res.json({success:true,token});
+        let cart = {};
+        for (let i = 0; i < 300; i++) {
+            cart[i] = 0;
         }
-        else{
-            res.json({success:false,errors:"Wrong Password"})
-        }
-    }
-    else{
-        res.json({success:false,errors:"Wrong Email Id"})
-    }
 
-})
+        const hashedPassword = await bcrypt.hash(req.body.password, 10);
+
+        const user = new Users({
+            name: req.body.username,
+            email: req.body.email,
+            password: hashedPassword,
+            cartData: cart,
+        });
+
+        await user.save();
+
+        const token = jwt.sign({userId: user.id}, process.env.JWT_SECRET);
+        res.json({success: true, token});
+    } catch (error) {
+        console.error("Error in signup:", error);
+        res.status(500).json({success: false, errors: "Server error"});
+    }
+});
+
+// User Login Endpoint
+app.post('/login', async (req, res) => {
+    try {
+        let user = await Users.findOne({email: req.body.email});
+        if (!user) {
+            return res.status(400).json({success: false, errors: "Invalid email or password"});
+        }
+
+        const passCompare = await bcrypt.compare(req.body.password, user.password);
+        if (!passCompare) {
+            return res.status(400).json({success: false, errors: "Invalid email or password"});
+        }
+
+        const token = jwt.sign({userId: user.id}, process.env.JWT_SECRET);
+        res.json({success: true, token});
+    } catch (error) {
+        console.error("Error in login:", error);
+        res.status(500).json({success: false, errors: "Server error"});
+    }
+});
+
+// Start the server
 app.listen(port, (error) => {
     if (!error) {
-        console.log("Server is running on " + port);
+        console.log("Server is running on port " + port);
     } else {
         console.log("Error: " + error);
     }
